@@ -44,6 +44,10 @@ class Driver:
                 await self._run_session(device)
             except asyncio.CancelledError:
                 raise
+            except TimeoutError as exc:
+                # expected whenever the scale is asleep; not worth a traceback
+                log.warning("connect timed out (%s) - scale probably asleep, retrying", exc)
+                await asyncio.sleep(2.0)
             except Exception:
                 log.exception("session failed; retrying")
                 await asyncio.sleep(2.0)
