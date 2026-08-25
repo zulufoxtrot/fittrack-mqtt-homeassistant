@@ -1,4 +1,4 @@
-# fittrack-driver
+# fittrack-scale-mqtt
 
 Bluetooth LE driver for the **FitTrack Dara** body-composition scale → **MQTT** →
 **Home Assistant** (via MQTT discovery). Runs headless in Docker on Linux.

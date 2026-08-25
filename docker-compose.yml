@@ -2,10 +2,12 @@ services:
   fittrack-driver:
     build: .
     image: fittrack-driver:latest
-    container_name: fittrack-driver
+    container_name: fittrack-scale-mqtt
     restart: unless-stopped
     # BLE discovery/connectivity needs the host stack; BlueZ runs on the host.
     network_mode: host
+    security_opt:
+      - apparmor:unconfined  # required on AppArmor hosts (Debian/Ubuntu): default profile blocks D-Bus
     volumes:
       - /var/run/dbus:/var/run/dbus:ro
     environment:

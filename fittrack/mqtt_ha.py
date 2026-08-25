@@ -56,7 +56,7 @@ class MqttPublisher:
         self.status_topic = f"{base}/status"
         self.guest_state_topic = f"{base}/guest_mode"
         self.guest_set_topic = f"{base}/guest_mode/set"
-        self.client = mqtt.Client(client_id="fittrack-driver")
+        self.client = mqtt.Client(client_id="fittrack-scale-mqtt")
         if cfg.mqtt_user:
             self.client.username_pw_set(cfg.mqtt_user, cfg.mqtt_pass or None)
         self.client.will_set(self.status_topic, "offline", qos=1, retain=True)
