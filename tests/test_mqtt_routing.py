@@ -95,7 +95,10 @@ def test_guest_mode_routes_only_weight_and_impedance_to_guest_topics():
     states = state_topics(pub, fake)
     assert states["guest/weight_kg"] == "63.8"
     assert states["guest/impedance_ohm"] == "708"
-    assert not any(not k.startswith("guest/") for k in states), states
+    # last_weighin is deliberately shared across modes (global freshness);
+    # everything else must stay on the guest branch
+    non_guest = [k for k in states if not k.startswith("guest/") and k != "last_weighin"]
+    assert not non_guest, states
 
 
 def test_measurement_blob_tags_user():
