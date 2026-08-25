@@ -98,9 +98,15 @@ def _be(buf: bytes) -> int:
 
 def is_telemetry_frame(data: bytes) -> bool:
     """True when a notification carries measurement data (vs command echoes/idle)."""
+    if len(data) == 20:
+        return True  # composite mirror pair
     if len(data) == 8 and data[0] == HDR and checksum8(data) == data[7]:
-        return data[6] in (CHAN_WEIGHT_LIVE, CHAN_WEIGHT_STABLE, CHAN_DUMP)
-    return len(data) == 20
+        chan, b2, b3 = data[6], data[2], data[3]
+        if chan in (CHAN_WEIGHT_LIVE, CHAN_WEIGHT_STABLE):
+            return True
+        if chan == CHAN_DUMP:
+            return (b2 == 0xFD and b3 == 0x01) or (b2 == 0xFE and b3 != IDX_END)
+    return False
 
 
 @dataclass
