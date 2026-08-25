@@ -75,7 +75,8 @@ class Driver:
                     self._grace_task = asyncio.create_task(self._grace_timer(session))
                 if measurement is not None:
                     self.publisher.publish_measurement(measurement)
-                    session.reset()
+                    # no session.reset() here: the session lazily re-arms itself
+                    # after the echo window, swallowing trailing composite mirrors
                     if self._grace_task:
                         self._grace_task.cancel()
                         self._grace_task = None
@@ -115,6 +116,5 @@ class Driver:
             m = session.grace_expired()
             if m is not None:
                 self.publisher.publish_measurement(m)
-                session.reset()
         except asyncio.CancelledError:
             pass
