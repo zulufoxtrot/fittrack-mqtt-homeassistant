@@ -18,9 +18,12 @@ SVC_FFB0 = "0000ffb0-0000-1000-8000-00805f9b34fb"
 CHR_CFG = "0000ffb1-0000-1000-8000-00805f9b34fb"
 CHR_DATA = "0000ffb2-0000-1000-8000-00805f9b34fb"
 
-SCAN_INTERVAL_S = 5.0
+SCAN_INTERVAL_S = 1.5
 IDLE_TIMEOUT_S = 30.0
-RECONNECT_COOLDOWN_S = 15.0
+RECONNECT_COOLDOWN_S = 5.0
+# The scale only stays connectable for ~25 s after being woken by weight;
+# a hung connect must not eat the whole window.
+CONNECT_TIMEOUT_S = 6.0
 
 
 class Driver:
@@ -43,7 +46,7 @@ class Driver:
                 raise
             except Exception:
                 log.exception("session failed; retrying")
-                await asyncio.sleep(RECONNECT_COOLDOWN_S)
+                await asyncio.sleep(2.0)
 
     # -- discovery ----------------------------------------------------------
 
@@ -64,7 +67,7 @@ class Driver:
     async def _run_session(self, device) -> None:
         session = ScaleSession()
         log.info("connecting to %s (%s)", device.name, device.address)
-        async with BleakClient(device, timeout=20.0) as client:
+        async with BleakClient(device, timeout=CONNECT_TIMEOUT_S) as client:
             log.info("connected, mtu=%d", client.mtu_size)
             self._last_frame_ts = asyncio.get_event_loop().time()
 
