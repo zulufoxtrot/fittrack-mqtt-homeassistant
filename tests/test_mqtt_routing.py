@@ -131,3 +131,16 @@ def test_format_value():
     assert format_value("weight_kg", 63.84) == "63.8"
     assert format_value("visceral_fat_index", 3.0) == "3"
     assert format_value("protein_pct", 20.34) == "20.3"
+
+
+def test_last_weighin_sensor_published_with_timestamp():
+    import json as _json
+
+    from datetime import datetime
+
+    pub, fake = make_publisher()
+    pub.publish_measurement(full_measurement())
+    topics = {t: p for t, p in fake.published}
+    raw = topics["fittrack_scale/last_weighin"]
+    datetime.fromisoformat(raw)  # must be RFC3339-parseable
+    assert _json.loads(topics["fittrack_scale/measurement"])["timestamp"] == raw

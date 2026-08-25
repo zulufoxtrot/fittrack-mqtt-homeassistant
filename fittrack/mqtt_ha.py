@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 
@@ -25,6 +26,9 @@ SENSORS: list[tuple[str, str, str | None, str | None, str]] = [
     ("metabolic_age_years", "Metabolic age", None, None, "mdi:calendar-heart"),
     ("protein_pct", "Protein", "%", None, "mdi:nutrition"),
     ("impedance_ohm", "Impedance", "Ω", None, "mdi:omega"),
+    # published separately below (not part of Measurement): makes stale
+    # retained values obvious on the HA card
+    ("last_weighin", "Last measurement", None, "timestamp", "mdi:clock-outline"),
 ]
 
 # Guests get weight + impedance only: body composition is computed by the
@@ -207,9 +211,11 @@ class MqttPublisher:
         for key, value in values.items():
             self.client.publish(f"{root}/{key}", format_value(key, value), retain=True)
 
+        stamp = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+        self.client.publish(f"{self.cfg.base_topic}/last_weighin", stamp, retain=True)
         self.client.publish(
             f"{self.cfg.base_topic}/measurement",
-            json.dumps({"user": user, "values": values}, default=str),
+            json.dumps({"user": user, "timestamp": stamp, "values": values}, default=str),
             retain=True,
         )
         log.info("published to MQTT (%s): %s", user, values)
