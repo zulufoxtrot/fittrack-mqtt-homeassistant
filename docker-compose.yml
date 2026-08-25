@@ -1,0 +1,20 @@
+services:
+  fittrack-driver:
+    build: .
+    image: fittrack-driver:latest
+    container_name: fittrack-driver
+    restart: unless-stopped
+    # BLE discovery/connectivity needs the host stack; BlueZ runs on the host.
+    network_mode: host
+    volumes:
+      - /var/run/dbus:/var/run/dbus:ro
+    environment:
+      FITTRACK_ADDRESS: ${FITTRACK_ADDRESS:-}
+      FITTRACK_SEX: ${FITTRACK_SEX:-male}
+      FITTRACK_BIRTH_YEAR: ${FITTRACK_BIRTH_YEAR:-1990}
+      FITTRACK_HEIGHT_CM: ${FITTRACK_HEIGHT_CM:-175}
+      MQTT_HOST: ${MQTT_HOST:-homeassistant.local}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASS: ${MQTT_PASS}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
