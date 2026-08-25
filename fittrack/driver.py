@@ -10,7 +10,7 @@ from bleak import BleakClient, BleakScanner
 
 from .config import Config
 from .mqtt_ha import MqttPublisher
-from .protocol import DUMP_GRACE_S, ScaleSession, init_sequence
+from .protocol import DUMP_GRACE_S, ScaleSession, init_sequence, is_telemetry_frame
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,12 @@ RECONNECT_COOLDOWN_S = 5.0
 # The scale only stays connectable for ~25 s after being woken by weight;
 # a hung connect must not eat the whole window.
 CONNECT_TIMEOUT_S = 6.0
+# Empirical: the scale disarms itself ~30-60 s after the handshake even while
+# connected, so later step-ons stream nothing. Re-arming with a fresh init
+# sequence keeps it ready to stream at any time.
+REINIT_INTERVAL_S = 25.0
+# Courtesy release: don't hold the GATT connection forever without data.
+DATA_TIMEOUT_S = 240.0
 
 
 class Driver:
@@ -32,6 +38,7 @@ class Driver:
         self.publisher = MqttPublisher(cfg)
         self._grace_task: asyncio.Task | None = None
         self._last_frame_ts: float = 0.0
+        self._last_data_ts: float = 0.0
 
     async def run(self) -> None:
         self.publisher.start()
@@ -73,10 +80,15 @@ class Driver:
         log.info("connecting to %s (%s)", device.name, device.address)
         async with BleakClient(device, timeout=CONNECT_TIMEOUT_S) as client:
             log.info("connected, mtu=%d", client.mtu_size)
-            self._last_frame_ts = asyncio.get_event_loop().time()
+            loop = asyncio.get_event_loop()
+            self._last_frame_ts = loop.time()
+            self._last_data_ts = loop.time()
 
             def on_data(_char, data: bytearray) -> None:
-                self._last_frame_ts = asyncio.get_event_loop().time()
+                now = loop.time()
+                self._last_frame_ts = now
+                if is_telemetry_frame(bytes(data)):
+                    self._last_data_ts = now
                 measurement = session.feed(bytes(data))
                 if session.settled and self._grace_task is None:
                     self._grace_task = asyncio.create_task(self._grace_timer(session))
@@ -89,33 +101,51 @@ class Driver:
                         self._grace_task = None
 
             await client.start_notify(CHR_DATA, on_data)
-            now = dt.datetime.now()
-            seq = init_sequence(
-                self.cfg.sex_male,
-                self.cfg.age,
-                self.cfg.height_cm,
-                (
-                    now.year - 2000, now.month, now.day,
-                    now.hour, now.minute, now.second,
-                ),
-            )
-            for pkt in seq:
-                await client.write_gatt_char(CHR_CFG, pkt, response=False)
-                await asyncio.sleep(0.25)
+            await self._send_init(client)
             log.info("init sequence sent; waiting for user to step on the scale")
+            last_init = loop.time()
 
             while True:
-                await asyncio.sleep(1.0)
-                idle = asyncio.get_event_loop().time() - self._last_frame_ts
-                if idle > IDLE_TIMEOUT_S:
-                    log.info("scale idle for %.0fs, disconnecting", idle)
+                await asyncio.sleep(0.5)
+                now = loop.time()
+                if now - self._last_frame_ts > IDLE_TIMEOUT_S:
+                    log.info("link silent for %.0fs, reconnecting", IDLE_TIMEOUT_S)
                     break
+                if now - self._last_data_ts > DATA_TIMEOUT_S:
+                    log.info(
+                        "no measurements for %.0fs, releasing scale",
+                        DATA_TIMEOUT_S,
+                    )
+                    break
+                # Re-arm the scale so a step-on at ANY moment streams data.
+                # Skip while a measurement is actively streaming.
+                if (
+                    now - last_init >= REINIT_INTERVAL_S
+                    and now - self._last_data_ts >= 5.0
+                ):
+                    await self._send_init(client)
+                    last_init = now
 
             if self._grace_task:
                 self._grace_task.cancel()
                 self._grace_task = None
 
         await asyncio.sleep(RECONNECT_COOLDOWN_S)
+
+    async def _send_init(self, client) -> None:
+        now = dt.datetime.now()
+        seq = init_sequence(
+            self.cfg.sex_male,
+            self.cfg.age,
+            self.cfg.height_cm,
+            (
+                now.year - 2000, now.month, now.day,
+                now.hour, now.minute, now.second,
+            ),
+        )
+        for pkt in seq:
+            await client.write_gatt_char(CHR_CFG, pkt, response=False)
+            await asyncio.sleep(0.25)
 
     async def _grace_timer(self, session: ScaleSession) -> None:
         try:

@@ -96,6 +96,13 @@ def _be(buf: bytes) -> int:
     return (buf[0] << 8) | buf[1]
 
 
+def is_telemetry_frame(data: bytes) -> bool:
+    """True when a notification carries measurement data (vs command echoes/idle)."""
+    if len(data) == 8 and data[0] == HDR and checksum8(data) == data[7]:
+        return data[6] in (CHAN_WEIGHT_LIVE, CHAN_WEIGHT_STABLE, CHAN_DUMP)
+    return len(data) == 20
+
+
 @dataclass
 class ScaleSession:
     """Accumulates one scale connection's frames into Measurements.

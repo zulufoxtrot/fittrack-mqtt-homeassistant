@@ -204,3 +204,16 @@ def test_session_rearms_after_reset_delay(monkeypatch=None):
         result = s.feed(f)
     assert result is None  # live frames never complete by themselves
     assert s.settled and s._pending.weight_kg == 64.4
+
+
+def test_telemetry_classification():
+    from fittrack.protocol import is_telemetry_frame
+
+    assert is_telemetry_frame(live(0x027E))          # live weight
+    assert is_telemetry_frame(stable(0x027E))        # stable weight
+    assert is_telemetry_frame(H("AC 02 FD 01 02 C4 CB 8F"))   # impedance
+    assert is_telemetry_frame(H("AC 02 FE 00 02 7E CB 49"))   # dump index
+    assert is_telemetry_frame(bytes(20))             # composite fragment
+    assert not is_telemetry_frame(H("AC 02 FB 1A 08 19 CB 01"))  # profile echo
+    assert not is_telemetry_frame(H("AC 02 F7 31 12 35 CC 3B"))  # cmd echo
+    assert not is_telemetry_frame(bytes(8))          # idle zeros
